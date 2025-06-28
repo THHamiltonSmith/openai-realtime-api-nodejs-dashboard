@@ -8,11 +8,15 @@ const conversation = document.getElementById('conversation');
 const userInput = document.getElementById('userInput');
 const submitButton = document.getElementById('submitMessage');
 const toggleButton = document.getElementById('toggle-button');
+const chatHistory = document.getElementById('chatHistory');
+const newChatButton = document.getElementById('newChat');
 
 // Variables
 let conversationMode = false;
 let currentBotMessage = null;
 let currentUserMessage = null;
+
+let activeConversationId = null;
 
 let sentUserMessage = null;
 let sentUserMessageContent = null;
@@ -32,6 +36,10 @@ toggleButton.addEventListener('click', toggleConversationMode);
 userInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') sendMessage();
 });
+newChatButton.addEventListener('click', createNewChat);
+
+document.addEventListener('DOMContentLoaded', loadChatHistory);
+
 
 // Send message to server
 function sendMessage() {
@@ -149,3 +157,61 @@ socket.on('conversationInterrupted', async () => {
         socket.emit('cancelResponse', { trackId, offset });
     }
 });
+
+// Chat History
+
+// Load chat history from server
+async function loadChatHistory() {
+    const res = await fetch('/conversations');
+    const chats = await res.json();
+    chatHistory.innerHTML = '';
+    chats.forEach((chat) => {
+        const li = document.createElement('li');
+        li.textContent = chat.title;
+        li.dataset.id = chat.id;
+        li.addEventListener('click', () => selectConversation(chat.id));
+        const del = document.createElement('button');
+        del.textContent = '✕';
+        del.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await deleteConversation(chat.id);
+        });
+        li.appendChild(del);
+        if (chat.id === activeConversationId) li.classList.add('active');
+        chatHistory.appendChild(li);
+    });
+}
+
+// Select a conversation from the history
+async function selectConversation(id) {
+    activeConversationId = id;
+    socket.emit('setConversation', id);
+    const res = await fetch(`/conversations/${id}`);
+    const convo = await res.json();
+    conversation.innerHTML = '';
+    convo.messages.forEach((msg) => {
+        if (msg.role === 'user') {
+            displayUserMessage(msg.content, true);
+        } else {
+            updateBotMessage(msg.content, true);
+        }
+    });
+    loadChatHistory();
+}
+
+// Create a new chat conversation
+async function createNewChat() {
+    const res = await fetch('/conversations', { method: 'POST' });
+    const convo = await res.json();
+    await selectConversation(convo.id);
+}
+
+// Delete a conversation
+async function deleteConversation(id) {
+    await fetch(`/conversations/${id}`, { method: 'DELETE' });
+    if (id === activeConversationId) {
+        conversation.innerHTML = '';
+        activeConversationId = null;
+    }
+    loadChatHistory();
+}

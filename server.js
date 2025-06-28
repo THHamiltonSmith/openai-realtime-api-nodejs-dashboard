@@ -7,6 +7,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { RealtimeClient } from '@openai/realtime-api-beta';
+import fs from 'fs';
+import { promises as fsp } from 'fs';
+import path from 'path';
 
 // Express setup
 const app = express();
@@ -17,6 +20,12 @@ const io = new Server(server);
 app.set('view engine', 'ejs');
 app.set('views', './views');
 app.use(express.static('public'));
+app.use(express.json());
+
+const conversationsDir = path.join(process.cwd(), 'conversations');
+if (!fs.existsSync(conversationsDir)) {
+    fs.mkdirSync(conversationsDir);
+}
 
 // Main Route
 app.get('/', (req, res) => {
@@ -26,6 +35,7 @@ app.get('/', (req, res) => {
 // Socket.io setup
 io.on('connection', (socket) => {
     const client = new RealtimeClient({ apiKey: process.env.OPENAI_API_KEY });
+    let activeConversation = null;
 
     client.updateSession({
         instructions: 'You are a helpful, english speaking assistant.',
@@ -45,7 +55,7 @@ io.on('connection', (socket) => {
     });
 
     // Handle conversation updates for transcription and audio
-    client.on('conversation.updated', (event) => {
+    client.on('conversation.updated', async (event) => {
         const { item, delta } = event;
 
         // Handle user input (partial or complete transcription)
@@ -54,6 +64,15 @@ io.on('connection', (socket) => {
                 text: item.formatted.transcript,
                 isFinal: item.status === 'completed',
             });
+
+            // Create or update active conversation
+            if (activeConversation && item.status === 'completed') {
+                if (activeConversation.title === 'New Chat') {
+                    activeConversation.title = item.formatted.transcript.slice(0, 40);
+                }
+                activeConversation.messages.push({ role: 'user', content: item.formatted.transcript });
+                await fsp.writeFile(path.join(conversationsDir, `${activeConversation.id}.json`), JSON.stringify(activeConversation, null, 2));
+            }
         } else if (item.role === 'user' && item.formatted.audio?.length && !item.formatted.transcript) {
 
             // Emit placeholder while waiting for transcript if audio is present
@@ -68,6 +87,12 @@ io.on('connection', (socket) => {
                 text: "(item sent)",
                 isFinal: true
             });
+
+            // Create a new conversation if it doesn't exist
+            if (activeConversation && item.status === 'completed') {
+                activeConversation.messages.push({ role: 'assistant', content: item.formatted.transcript });
+                await fsp.writeFile(path.join(conversationsDir, `${activeConversation.id}.json`), JSON.stringify(activeConversation, null, 2));
+            }
         }
 
         // Send bot responses to the client
@@ -103,6 +128,17 @@ io.on('connection', (socket) => {
         socket.emit('conversationInterrupted');
     });
 
+    // Handle setting the active conversation
+    socket.on('setConversation', async (id) => {
+        try {
+            const data = await fsp.readFile(path.join(conversationsDir, `${id}.json`), 'utf8');
+            activeConversation = JSON.parse(data);
+            client.conversation.clear();
+        } catch (err) {
+            console.error('Failed to load conversation', err);
+        }
+    });
+
     // Handle cancel response requests from the client
     socket.on('cancelResponse', async ({ trackId, offset }) => {
         if (trackId) {
@@ -122,6 +158,47 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         client.disconnect();
     });
+});
+
+// REST Endpoints for conversations
+app.get('/conversations', async (req, res) => {
+    const files = await fsp.readdir(conversationsDir);
+    const convos = [];
+    for (const file of files) {
+        if (!file.endsWith('.json')) continue;
+        const data = await fsp.readFile(path.join(conversationsDir, file), 'utf8');
+        const { id, title } = JSON.parse(data);
+        convos.push({ id, title });
+    }
+    res.json(convos);
+});
+
+// Get a specific conversation by ID
+app.get('/conversations/:id', async (req, res) => {
+    try {
+        const data = await fsp.readFile(path.join(conversationsDir, `${req.params.id}.json`), 'utf8');
+        res.json(JSON.parse(data));
+    } catch {
+        res.status(404).json({ error: 'Conversation not found' });
+    }
+});
+
+// Create a new conversation
+app.post('/conversations', async (req, res) => {
+    const id = Date.now().toString();
+    const convo = { id, title: 'New Chat', messages: [] };
+    await fsp.writeFile(path.join(conversationsDir, `${id}.json`), JSON.stringify(convo, null, 2));
+    res.json(convo);
+});
+
+// Delete an existing conversation
+app.delete('/conversations/:id', async (req, res) => {
+    try {
+        await fsp.unlink(path.join(conversationsDir, `${req.params.id}.json`));
+        res.json({ success: true });
+    } catch {
+        res.status(404).json({ error: 'Conversation not found' });
+    }
 });
 
 // Start server

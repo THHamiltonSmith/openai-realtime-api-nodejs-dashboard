@@ -12,6 +12,7 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <h2>Chats</h2>
+            <button id="newChat" class="new-chat-button">New Chat</button>
             <ul class="chat-history" id="chatHistory"></ul>
         </aside>
 
@@ -32,15 +33,6 @@
             </div>
         </div>
     </div>
-
-    <!-- Variables accessible to dashboard.js -->
-    <script>
-        window.chatList = [
-            { id: 'chat-1', title: 'New Chat' },
-            { id: 'chat-2', title: 'Project Notes' },
-            { id: 'chat-3', title: 'Design Ideas' }
-        ];
-    </script>
 
     <script src="/socket.io/socket.io.js"></script>
     <script type="module" src="/dashboard.js"></script>
