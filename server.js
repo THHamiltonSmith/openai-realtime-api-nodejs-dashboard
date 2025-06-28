@@ -77,25 +77,26 @@ io.on('connection', (socket) => {
             await ensureActiveConversation();
         }
 
-        // Handle user input (partial or complete transcription)
-        if (item.role === 'user' && item.formatted.transcript) {
+        // Handle user input (typed text or transcription)
+        if (item.role === 'user' && (item.formatted.transcript || item.formatted.text)) {
+            const messageText = item.formatted.transcript || item.formatted.text;
             socket.emit('displayUserMessage', {
-                text: item.formatted.transcript,
+                text: messageText,
                 isFinal: item.status === 'completed',
             });
 
             if (activeConversation && item.status === 'completed') {
                 if (activeConversation.title === 'New Chat') {
-                    activeConversation.title = item.formatted.transcript.slice(0, 40);
+                    activeConversation.title = messageText.slice(0, 40);
                 }
-                activeConversation.messages.push({ role: 'user', content: item.formatted.transcript });
+                activeConversation.messages.push({ role: 'user', content: messageText });
                 await fsp.writeFile(
                     path.join(conversationsDir, `${activeConversation.id}.json`),
                     JSON.stringify(activeConversation, null, 2)
                 );
             }
 
-            // If the user message has audio but no transcript, indicate that
+        // If the user message has audio but no transcript, indicate that
         } else if (item.role === 'user' && item.formatted.audio?.length && !item.formatted.transcript) {
             socket.emit('displayUserMessage', {
                 text: "(awaiting transcript)",
