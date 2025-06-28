@@ -37,12 +37,27 @@ io.on('connection', (socket) => {
     const client = new RealtimeClient({ apiKey: process.env.OPENAI_API_KEY });
     let activeConversation = null;
 
+    // Ensure an active conversation exists
+    async function ensureActiveConversation() {
+        if (!activeConversation) {
+            const id = Date.now().toString();
+            activeConversation = { id, title: 'New Chat', messages: [] };
+            await fsp.writeFile(
+                path.join(conversationsDir, `${id}.json`),
+                JSON.stringify(activeConversation, null, 2)
+            );
+            socket.emit('conversationCreated', { id });
+        }
+    }
+
     client.updateSession({
-        instructions: 'You are a helpful, english speaking assistant.',
+        instructions: 'You are a helpful, english speaking assistant. Speak quickly and concisely, dont slow down speed between sentences and prompts.',
         voice: 'alloy',
+        voice_speed: 1.5,
         turn_detection: { type: 'server_vad', threshold: 0.3 },
         output_audio: { model: 'audio-davinci', format: 'pcm' },
         input_audio_transcription: { model: 'whisper-1' },
+        conversation: { enable: true },
     });
 
     client.connect().catch((error) => {
@@ -58,6 +73,10 @@ io.on('connection', (socket) => {
     client.on('conversation.updated', async (event) => {
         const { item, delta } = event;
 
+        if (item.role === 'user' && item.status === 'completed') {
+            await ensureActiveConversation();
+        }
+
         // Handle user input (partial or complete transcription)
         if (item.role === 'user' && item.formatted.transcript) {
             socket.emit('displayUserMessage', {
@@ -65,45 +84,56 @@ io.on('connection', (socket) => {
                 isFinal: item.status === 'completed',
             });
 
-            // Create or update active conversation
             if (activeConversation && item.status === 'completed') {
                 if (activeConversation.title === 'New Chat') {
                     activeConversation.title = item.formatted.transcript.slice(0, 40);
                 }
                 activeConversation.messages.push({ role: 'user', content: item.formatted.transcript });
-                await fsp.writeFile(path.join(conversationsDir, `${activeConversation.id}.json`), JSON.stringify(activeConversation, null, 2));
+                await fsp.writeFile(
+                    path.join(conversationsDir, `${activeConversation.id}.json`),
+                    JSON.stringify(activeConversation, null, 2)
+                );
             }
-        } else if (item.role === 'user' && item.formatted.audio?.length && !item.formatted.transcript) {
 
-            // Emit placeholder while waiting for transcript if audio is present
+            // If the user message has audio but no transcript, indicate that
+        } else if (item.role === 'user' && item.formatted.audio?.length && !item.formatted.transcript) {
             socket.emit('displayUserMessage', {
                 text: "(awaiting transcript)",
-                isFinal: false
+                isFinal: false,
             });
-        } else if (item.role === 'user' && !item.formatted.transcript) {
 
-            // Fallback in case neither transcript nor audio is present
+            // If the active conversation exists, add a placeholder message
+        } else if (item.role === 'user' && !item.formatted.transcript) {
             socket.emit('displayUserMessage', {
                 text: "(item sent)",
-                isFinal: true
+                isFinal: true,
             });
-
-            // Create a new conversation if it doesn't exist
+            
             if (activeConversation && item.status === 'completed') {
-                activeConversation.messages.push({ role: 'assistant', content: item.formatted.transcript });
-                await fsp.writeFile(path.join(conversationsDir, `${activeConversation.id}.json`), JSON.stringify(activeConversation, null, 2));
+                activeConversation.messages.push({ role: 'user', content: '(unable to transcribe)' });
+                await fsp.writeFile(
+                    path.join(conversationsDir, `${activeConversation.id}.json`),
+                    JSON.stringify(activeConversation, null, 2)
+                );
             }
         }
 
-        // Send bot responses to the client
+        // Handle assistant responses (partial or complete)
         if (item.role !== 'user' && item.formatted.transcript) {
             socket.emit('conversationUpdate', {
                 text: item.formatted.transcript,
                 isFinal: item.status === 'completed',
             });
+            if (activeConversation && item.status === 'completed') {
+                activeConversation.messages.push({ role: 'assistant', content: item.formatted.transcript });
+                await fsp.writeFile(
+                    path.join(conversationsDir, `${activeConversation.id}.json`),
+                    JSON.stringify(activeConversation, null, 2)
+                );
+            }
         }
 
-        // Send audio updates to client
+        // Handle audio responses
         if (delta?.audio) {
             const audioData = delta.audio.buffer || delta.audio;
             socket.emit('audioStream', audioData, item.id);
@@ -151,7 +181,8 @@ io.on('connection', (socket) => {
     });
 
     // Handle text messages from the user
-    socket.on('userMessage', (message) => {
+   socket.on('userMessage', async (message) => {
+        await ensureActiveConversation();
         client.sendUserMessageContent([{ type: 'input_text', text: message }]);
     });
 

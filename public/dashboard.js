@@ -158,6 +158,11 @@ socket.on('conversationInterrupted', async () => {
     }
 });
 
+// Select conversation when server creates a new one automatically
+socket.on('conversationCreated', async ({ id }) => {
+    await selectConversation(id);
+});
+
 // Chat History
 
 // Load chat history from server
