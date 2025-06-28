@@ -81,16 +81,13 @@ openai-realtime-api-nodejs-dashboard/
 | `-- style.css # Styling for the application
 |
 |-- views/ # Frontend HTML files
-|  -- index.ejs
-|-- conversations/ # Saved chat logs
+|  -- index.ejs 
 |
 |-- .env # Environment variables (not included in version control)
 |-- server.js # Main server file
 |-- package.json # Project metadata and dependencies
 `-- README.md # Project documentation
 ```
-
-Make sure to add the `conversations` directory to your `.gitignore` if it's not already so saved chat logs are not committed to version control.
 
 ## Usage
 
