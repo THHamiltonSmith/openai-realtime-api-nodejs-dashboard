@@ -8,19 +8,39 @@
 </head>
 <body>
     <div class="main-container">
-        <div class="conversation-container" id="conversation">
-            <div class="message bot-message">Assistant: Hello! How can I assist you today?</div>
-        </div>
-        <div id="input-container">
-            <input type="text" id="userInput" placeholder="Type your message...">
-            <button id="submitMessage">
-                <i class="fas fa-paper-plane"></i>
-            </button>
-            <button id="toggle-button">
-                <i class="fas fa-microphone"></i>
-            </button>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <h2>Chats</h2>
+            <ul class="chat-history" id="chatHistory"></ul>
+        </aside>
+
+        <!-- Chat + Input Area -->
+        <div class="chat-content">
+            <div class="conversation-container" id="conversation">
+                <div class="message bot-message">Assistant: Hello! How can I assist you today?</div>
+            </div>
+
+            <div id="input-container">
+                <input type="text" id="userInput" placeholder="Type your message..." autocomplete="off">
+                <button id="submitMessage">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+                <button id="toggle-button">
+                    <i class="fas fa-microphone"></i>
+                </button>
+            </div>
         </div>
     </div>
+
+    <!-- Variables accessible to dashboard.js -->
+    <script>
+        window.chatList = [
+            { id: 'chat-1', title: 'New Chat' },
+            { id: 'chat-2', title: 'Project Notes' },
+            { id: 'chat-3', title: 'Design Ideas' }
+        ];
+    </script>
 
     <script src="/socket.io/socket.io.js"></script>
     <script type="module" src="/dashboard.js"></script>

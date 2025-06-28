@@ -38,7 +38,7 @@ Include a screenshot showing the app interface
 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/openai-realtime-api-nodejs-dashboard.git
+git clone https://github.com/THHamiltonSmith/openai-realtime-api-nodejs-dashboard.git
 cd openai-realtime-api-nodejs-dashboard
 ```
 
