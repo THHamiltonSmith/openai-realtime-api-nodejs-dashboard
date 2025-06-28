@@ -55,7 +55,34 @@ body {
 
 .chat-history li:hover,
 .chat-history li.active {
-	background-color: #333;
+        background-color: #333;
+}
+
+.new-chat-button {
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 16px;
+        border: none;
+        border-radius: 8px;
+        background-color: #4caf50;
+        color: #fff;
+        cursor: pointer;
+}
+
+.new-chat-button:hover {
+        background-color: #66bb6a;
+}
+
+.chat-history li button {
+        margin-left: 8px;
+        background: transparent;
+        border: none;
+        color: #bbb;
+        cursor: pointer;
+}
+
+.chat-history li button:hover {
+        color: #fff;
 }
 
 /* Right Panel (chat + input) */
@@ -82,7 +109,6 @@ body {
 	padding: 14px 16px;
 	border-radius: 12px;
 	line-height: 1.5;
-	max-width: 80%;
 	animation: fadeIn 0.3s ease-in-out;
 }
 
